@@ -20,7 +20,17 @@
           "name": "AI Code Roaster"
         }
       ]
-    }
+    },
+    "commands": [
+      {
+        "command": "aiCodeRoaster.setApiKey",
+        "title": "AI Code Roaster: Set API Key"
+      },
+      {
+        "command": "aiCodeRoaster.deleteApiKey",
+        "title": "AI Code Roaster: Delete API Key"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
