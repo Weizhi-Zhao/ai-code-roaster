@@ -3,6 +3,7 @@
   "displayName": "AI Code Roaster",
   "description": "",
   "version": "0.0.1",
+  "license": "GPL-3.0-only",
   "engines": {
     "vscode": "^1.107.0"
   },

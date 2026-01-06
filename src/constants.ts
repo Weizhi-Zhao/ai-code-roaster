@@ -1,23 +1,23 @@
 export const CONSTANTS = {
-  OPENROUTER_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
-  MODEL: 'qwen/qwen3-coder:free',
-  SECRET_KEY: 'openrouter-api-key',
-  TEST_MESSAGE: 'What is the meaning of life?',
+   OPENROUTER_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+   MODEL: 'xiaomi/mimo-v2-flash:free',
+   SECRET_KEY: 'openrouter-api-key',
+   TEST_MESSAGE: 'What is the meaning of life?',
 
-  // Code roasting configuration
-  MAX_FILE_SIZE: 100 * 1024, // 100KB in bytes
-  SUPPORTED_FILE_TYPES: [
-    '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
-    '.py', '.rb', '.go', '.rs', '.java', '.kt', '.swift',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.php',
-    '.scala', '.clj', '.hs', '.ml', '.ex', '.exs',
-    '.lua', '.r', '.m', '.sh', '.bash', '.zsh',
-    '.css', '.scss', '.sass', '.less', '.html', '.json',
-    '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'
-  ],
+   // Code roasting configuration
+   MAX_FILE_SIZE: 100 * 1024, // 100KB in bytes
+   SUPPORTED_FILE_TYPES: [
+      '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
+      '.py', '.rb', '.go', '.rs', '.java', '.kt', '.swift',
+      '.c', '.cpp', '.h', '.hpp', '.cs', '.php',
+      '.scala', '.clj', '.hs', '.ml', '.ex', '.exs',
+      '.lua', '.r', '.m', '.sh', '.bash', '.zsh',
+      '.css', '.scss', '.sass', '.less', '.html', '.json',
+      '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf'
+   ],
 
-  // System prompt for code roasting (Chinese)
-  ROAST_SYSTEM_PROMPT: `你现在是一位拥有 20 年经验、经历过无数个"屎山"代码洗礼的传奇程序员，也是一位毒舌的"代码锐评家"。你的任务是阅读用户提供的代码片段，并对其进行幽默、讽刺但富有启发性的点评。
+   // System prompt for code roasting (Chinese)
+   ROAST_SYSTEM_PROMPT: `你现在是一位拥有 20 年经验、经历过无数个"屎山"代码洗礼的传奇程序员，也是一位毒舌的"代码锐评家"。你的任务是阅读用户提供的代码片段，并对其进行幽默、讽刺但富有启发性的点评。
 
 请严格遵守以下规则：
 
