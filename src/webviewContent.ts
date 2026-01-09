@@ -110,13 +110,13 @@ export function getNoApiKeyHtml(): string {
 </head>
 <body>
   <div class="container">
-    <h2>OpenRouter API Key Not Found</h2>
-    <p>To use this extension, you need to configure your OpenRouter API key.</p>
-    <div class="step">1. Get your free API key from <a href="https://openrouter.ai/keys" class="link">openrouter.ai/keys</a></div>
-    <div class="step">2. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)</div>
-    <div class="step">3. Run <strong>"AI Code Roaster: Set API Key"</strong></div>
+    <h2>API Configuration Required</h2>
+    <p>To use this extension, you need to configure your API settings (supports any OpenAI-compatible API).</p>
+    <div class="step">1. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)</div>
+    <div class="step">2. Run <strong>"AI Code Roaster: Configure API"</strong></div>
+    <div class="step">3. Enter your API Base URL, Model Name, and API Key</div>
     <div class="command-box">
-      This will securely store your API key in VSCode's secret storage.
+      Your API key will be securely stored in VSCode's secret storage.
     </div>
   </div>
 </body>

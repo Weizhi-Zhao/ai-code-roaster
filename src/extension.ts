@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import { CONSTANTS } from './constants';
+import { CONSTANTS, ROLES, RoleType } from './constants';
 import { LlmApiClient } from './apiClient';
 import { RoastHistory } from './roastHistory';
 import { ConfigurationManager } from './configurationManager';
@@ -19,6 +19,7 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _isActive = false;
     private roastHistoryMap = new Map<string, RoastHistory>();
+    private _refreshTimerId?: NodeJS.Timeout;
 
     /**
      * Creates a new instance of the AICodeRoasterViewProvider.
@@ -47,15 +48,26 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.onDidChangeVisibility(() => {
             this._isActive = webviewView.visible;
+
+            if (this._isActive) {
+                this.startRefreshTimer(); // Start timer when visible
+            } else {
+                this.stopRefreshTimer();  // Stop timer when hidden
+            }
+
             this.refresh();
         });
 
         webviewView.onDidDispose(() => {
             this._isActive = false;
+            this.stopRefreshTimer();
         });
 
         // Trigger the API request when webview is shown
         this.refresh();
+
+        // Start auto-refresh timer
+        this.startRefreshTimer();
     }
 
     /**
@@ -65,6 +77,27 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
     private updateWebview(html: string) {
         if (this._view) {
             this._view.webview.html = html;
+        }
+    }
+
+    /**
+     * Starts the auto-refresh timer (only when sidebar is visible).
+     */
+    private startRefreshTimer() {
+        this.stopRefreshTimer(); // Clear existing timer
+
+        this._refreshTimerId = setInterval(() => {
+            this.refresh();
+        }, CONSTANTS.AUTO_REFRESH_INTERVAL);
+    }
+
+    /**
+     * Stops the auto-refresh timer.
+     */
+    private stopRefreshTimer() {
+        if (this._refreshTimerId) {
+            clearInterval(this._refreshTimerId);
+            this._refreshTimerId = undefined;
         }
     }
 
@@ -116,34 +149,39 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
 
         // 4. RoastHistory.isSignificantChange
         const filePath = document.uri.toString();
+        const currentRoleId = await this.configManager.getRole();
         const cached = this.roastHistoryMap.get(filePath);
-        if (cached && !cached.isSignificantChange(document)) {
+        if (cached && !cached.isSignificantChange(document, currentRoleId)) {
             // Show cached response
             this.updateWebview(getSuccessHtml(cached.response, document.fileName));
             return;
         }
 
-        // 5. Check API key
+        // 5. Check API key and config
         const apiKey = await this.configManager.getApiKey();
-        if (!apiKey) {
+        const config = await this.configManager.getConfig();
+        if (!apiKey || !config) {
             this.updateWebview(getNoApiKeyHtml());
             return;
         }
 
         // 6. Request API with streaming
-        const config = await this.configManager.getConfig();
         this.updateWebview(getStreamingHtml(document.fileName));
         try {
+            // Get the role config (role already retrieved above)
+            const roleConfig = ROLES[currentRoleId];
+
             const response = await this.apiClient.roastCodeStream(
                 document.getText(),
                 document.fileName,
                 apiKey,
+                config.baseUrl,
+                config.model,
+                roleConfig.systemPrompt,
                 (chunk) => {
                     // Send chunk to webview for streaming display
                     this._view?.webview.postMessage({ type: 'chunk', content: chunk });
-                },
-                config.baseUrl,
-                config.model
+                }
             );
             // Notify webview that streaming is done
             this._view?.webview.postMessage({ type: 'done' });
@@ -155,7 +193,7 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
                     this.roastHistoryMap.delete(oldestKey);
                 }
             }
-            this.roastHistoryMap.set(filePath, new RoastHistory(document, response));
+            this.roastHistoryMap.set(filePath, new RoastHistory(document, response, currentRoleId));
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             this._view?.webview.postMessage({ type: 'error', content: errorMessage });
@@ -214,6 +252,10 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
 
         return { isValid: true };
     }
+
+    dispose() {
+        this.stopRefreshTimer();
+    }
 }
 
 /*
@@ -233,6 +275,9 @@ export function activate(context: vscode.ExtensionContext) {
     const webviewViewProvider = vscode.window.registerWebviewViewProvider('ai-code-roaster', provider);
     context.subscriptions.push(webviewViewProvider);
 
+    // Ensure provider cleanup on deactivation
+    context.subscriptions.push(new vscode.Disposable(() => provider.dispose()));
+
     // Register file change listener for automatic roasting
     const fileChangeDisposable = vscode.window.onDidChangeActiveTextEditor(async () => {
         await provider.refresh();
@@ -242,70 +287,63 @@ export function activate(context: vscode.ExtensionContext) {
     // Register command to configure API (URL, model, key)
     const configureCommand = vscode.commands.registerCommand('aiCodeRoaster.configureApi', async () => {
         const currentConfig = await configManager.getConfig();
+        const currentApiKey = await configManager.getApiKey();
 
         // Ask for API Base URL
-        const baseUrl = await vscode.window.showInputBox({
-            prompt: 'Enter API Base URL (leave empty to keep current)',
-            value: currentConfig.baseUrl,
-            placeHolder: 'https://api.openai.com/v1/chat/completions'
+        const baseUrlInput = await vscode.window.showInputBox({
+            prompt: 'Enter API Base URL',
+            value: currentConfig?.baseUrl ?? ''
         });
-        if (baseUrl === undefined) {
+        if (baseUrlInput === undefined) {
             return; // User cancelled
         }
 
         // Ask for Model Name
-        const model = await vscode.window.showInputBox({
-            prompt: 'Enter Model Name (leave empty to keep current)',
-            value: currentConfig.model,
-            placeHolder: 'gpt-4o-mini'
+        const modelInput = await vscode.window.showInputBox({
+            prompt: 'Enter Model Name',
+            value: currentConfig?.model ?? ''
         });
-        if (model === undefined) {
+        if (modelInput === undefined) {
             return; // User cancelled
         }
 
         // Ask for API Key
-        const apiKey = await vscode.window.showInputBox({
-            prompt: 'Enter API Key (leave empty to keep current)',
+        const apiKeyInput = await vscode.window.showInputBox({
+            prompt: 'Enter API Key',
             password: true,
-            placeHolder: 'sk-...'
+            value: ''
         });
-        if (apiKey === undefined) {
+        if (apiKeyInput === undefined) {
             return; // User cancelled
         }
 
-        // Update only what was provided
-        let changesMade = false;
+        // Use new input if provided, otherwise keep current value
+        const baseUrl = baseUrlInput.trim() || currentConfig?.baseUrl;
+        const model = modelInput.trim() || currentConfig?.model;
+        const apiKey = apiKeyInput.trim() || currentApiKey;
 
-        if (baseUrl.trim()) {
-            try {
-                await configManager.saveConfig({ ...currentConfig, baseUrl: baseUrl.trim() });
-                changesMade = true;
-            } catch (error) {
-                vscode.window.showErrorMessage(`Failed to save base URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                return;
-            }
+        // Validate: if both current and new are empty, show error
+        if (!baseUrl) {
+            vscode.window.showErrorMessage('API Base URL is required.');
+            return;
+        }
+        if (!model) {
+            vscode.window.showErrorMessage('Model Name is required.');
+            return;
+        }
+        if (!apiKey) {
+            vscode.window.showErrorMessage('API Key is required.');
+            return;
         }
 
-        if (model.trim()) {
-            try {
-                await configManager.saveConfig({ ...currentConfig, model: model.trim() });
-                changesMade = true;
-            } catch (error) {
-                vscode.window.showErrorMessage(`Failed to save model: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                return;
-            }
-        }
-
-        if (apiKey.trim()) {
-            await configManager.storeApiKey(apiKey.trim());
-            changesMade = true;
-        }
-
-        if (changesMade) {
+        // Save config
+        try {
+            await configManager.saveConfig({ baseUrl, model });
+            await configManager.storeApiKey(apiKey);
             vscode.window.showInformationMessage('Configuration saved successfully!');
             await provider.refresh();
-        } else {
-            vscode.window.showInformationMessage('No changes made.');
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     });
     context.subscriptions.push(configureCommand);
@@ -320,12 +358,36 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (confirmed === 'Delete') {
             await configManager.deleteApiKey();
-            await configManager.resetToDefaults();
+            await configManager.deleteConfig();
             vscode.window.showInformationMessage('All configuration deleted successfully!');
             await provider.refresh();
         }
     });
     context.subscriptions.push(deleteApiConfigCommand);
+
+    // Register command to switch role
+    const switchRoleCommand = vscode.commands.registerCommand('aiCodeRoaster.switchRole', async () => {
+        const currentRole = await configManager.getRole();
+        const currentRoleName = ROLES[currentRole].name;
+
+        const items = Object.entries(ROLES).map(([key, role]) => ({
+            label: role.name,
+            description: role.description,
+            value: key as RoleType
+        }));
+
+        const selected = await vscode.window.showQuickPick(items, {
+            placeHolder: `当前角色: ${currentRoleName}`,
+            title: '选择 AI 角色'
+        });
+
+        if (selected) {
+            await configManager.setRole(selected.value);
+            vscode.window.showInformationMessage(`已切换到: ${selected.label}`);
+            await provider.refresh();
+        }
+    });
+    context.subscriptions.push(switchRoleCommand);
 }
 
 export function deactivate() { }

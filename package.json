@@ -33,17 +33,27 @@
     "commands": [
       {
         "command": "aiCodeRoaster.configureApi",
-        "title": "Configure API",
+        "title": "AI Code Roaster: Configure API",
         "icon": "$(settings-gear)"
       },
       {
         "command": "aiCodeRoaster.deleteApiConfig",
-        "title": "Delete All Configuration",
+        "title": "AI Code Roaster: Delete All Configuration",
         "icon": "$(trash)"
+      },
+      {
+        "command": "aiCodeRoaster.switchRole",
+        "title": "AI Code Roaster: Switch Role",
+        "icon": "$(account)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "aiCodeRoaster.switchRole",
+          "when": "view == ai-code-roaster",
+          "group": "navigation@0"
+        },
         {
           "command": "aiCodeRoaster.configureApi",
           "when": "view == ai-code-roaster",
