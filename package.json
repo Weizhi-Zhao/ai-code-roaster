@@ -18,20 +18,44 @@
         {
           "type": "webview",
           "id": "ai-code-roaster",
-          "name": "AI Code Roaster"
+          "name": "AI Code Roaster",
+          "icon": "media/icon.svg",
+          "contextualTitle": "AI Code Roaster"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "ai-code-roaster",
+        "contents": "Open a file to start roasting!"
+      }
+    ],
     "commands": [
       {
-        "command": "aiCodeRoaster.setApiKey",
-        "title": "AI Code Roaster: Set API Key"
+        "command": "aiCodeRoaster.configureApi",
+        "title": "Configure API",
+        "icon": "$(settings-gear)"
       },
       {
-        "command": "aiCodeRoaster.deleteApiKey",
-        "title": "AI Code Roaster: Delete API Key"
+        "command": "aiCodeRoaster.deleteApiConfig",
+        "title": "Delete All Configuration",
+        "icon": "$(trash)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aiCodeRoaster.configureApi",
+          "when": "view == ai-code-roaster",
+          "group": "navigation@1"
+        },
+        {
+          "command": "aiCodeRoaster.deleteApiConfig",
+          "when": "view == ai-code-roaster",
+          "group": "navigation@2"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -41,14 +65,17 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
+  "dependencies": {
+    "diff": "^8.0.2"
+  },
   "devDependencies": {
-    "@types/vscode": "^1.107.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.48.1",
+    "@types/vscode": "^1.107.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.48.1"
   }
 }

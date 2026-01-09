@@ -34,78 +34,147 @@ function isChatResponse(obj: unknown): obj is ChatResponse {
   );
 }
 
-export class OpenRouterClient {
-  async sendMessage(message: string, apiKey: string): Promise<string> {
+function handleErrorResponse(response: Response): never {
+  if (response.status === 401) {
+    throw new ApiClientError('Invalid API key. Please check your API key.', 401);
+  } else if (response.status === 429) {
+    throw new ApiClientError('Rate limit exceeded. Please try again later.', 429);
+  } else if (response.status >= 500) {
+    throw new ApiClientError('API server error. Please try again later.', response.status);
+  }
+  throw new ApiClientError(`API error: ${response.status} ${response.statusText}`, response.status);
+}
+
+function handleFetchError(error: unknown): never {
+  if (error instanceof ApiClientError) {
+    throw error;
+  }
+  if (error instanceof TypeError) {
+    throw new ApiClientError('Network error. Please check your internet connection.', undefined, true);
+  }
+  throw error;
+}
+
+export interface StreamChunkCallback {
+  (chunk: string): void;
+}
+
+/**
+ * Generic LLM API Client supporting OpenAI-compatible APIs.
+ */
+export class LlmApiClient {
+  constructor(
+    private defaultBaseUrl: string = CONSTANTS.DEFAULT_API_URL,
+    private defaultModel: string = CONSTANTS.DEFAULT_MODEL
+  ) { }
+
+  async roastCodeStream(
+    fileContent: string,
+    fileName: string,
+    apiKey: string,
+    onChunk: StreamChunkCallback,
+    baseUrl?: string,
+    model?: string
+  ): Promise<string> {
+    const url = baseUrl || this.defaultBaseUrl;
+    const modelName = model || this.defaultModel;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: CONSTANTS.ROAST_SYSTEM_PROMPT },
+      { role: 'user', content: `请锐评以下代码文件：${fileName}\n\n${fileContent}` }
+    ];
+
     try {
-      const response = await fetch(CONSTANTS.OPENROUTER_API_URL, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: CONSTANTS.MODEL,
-          messages: [{ role: 'user', content: message }]
+          model: modelName,
+          messages,
+          stream: true
         })
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new ApiClientError('Invalid API key. Please check your OpenRouter API key.', 401);
-        } else if (response.status === 429) {
-          throw new ApiClientError('Rate limit exceeded. Please try again later.', 429);
-        } else if (response.status >= 500) {
-          throw new ApiClientError('OpenRouter API server error. Please try again later.', response.status);
-        }
-        throw new ApiClientError(`API error: ${response.status} ${response.statusText}`, response.status);
+        handleErrorResponse(response);
       }
 
-      const rawData = await response.json();
-      if (!isChatResponse(rawData)) {
-        throw new ApiClientError('Invalid response format from API');
+      if (!response.body) {
+        throw new ApiClientError('Response body is null');
       }
-      return rawData.choices[0].message.content;
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              return fullContent;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+                onChunk(content);
+              }
+            } catch {
+              // Ignore invalid JSON lines
+            }
+          }
+        }
+      }
+
+      return fullContent;
     } catch (error) {
-      if (error instanceof ApiClientError) {
-        throw error;
-      }
-      // Handle network errors (fetch throws on network failure)
-      if (error instanceof TypeError) {
-        throw new ApiClientError('Network error. Please check your internet connection.', undefined, true);
-      }
-      throw error;
+      handleFetchError(error);
     }
   }
 
-  async roastCode(fileContent: string, fileName: string, apiKey: string): Promise<string> {
-    const systemPrompt = CONSTANTS.ROAST_SYSTEM_PROMPT;
-    const userMessage = `请锐评以下代码文件：${fileName}\n\n${fileContent}`;
+  async roastCode(
+    fileContent: string,
+    fileName: string,
+    apiKey: string,
+    baseUrl?: string,
+    model?: string
+  ): Promise<string> {
+    const url = baseUrl || this.defaultBaseUrl;
+    const modelName = model || this.defaultModel;
+
+    const messages: ChatMessage[] = [
+      { role: 'system', content: CONSTANTS.ROAST_SYSTEM_PROMPT },
+      { role: 'user', content: `请锐评以下代码文件：${fileName}\n\n${fileContent}` }
+    ];
 
     try {
-      const response = await fetch(CONSTANTS.OPENROUTER_API_URL, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: CONSTANTS.MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage }
-          ]
+          model: modelName,
+          messages
         })
       });
 
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new ApiClientError('Invalid API key. Please check your OpenRouter API key.', 401);
-        } else if (response.status === 429) {
-          throw new ApiClientError('Rate limit exceeded. Please try again later.', 429);
-        } else if (response.status >= 500) {
-          throw new ApiClientError('OpenRouter API server error. Please try again later.', response.status);
-        }
-        throw new ApiClientError(`API error: ${response.status} ${response.statusText}`, response.status);
+        handleErrorResponse(response);
       }
 
       const rawData = await response.json();
@@ -114,13 +183,47 @@ export class OpenRouterClient {
       }
       return rawData.choices[0].message.content;
     } catch (error) {
-      if (error instanceof ApiClientError) {
-        throw error;
+      handleFetchError(error);
+    }
+  }
+
+  async testConnection(
+    apiKey: string,
+    baseUrl?: string,
+    model?: string
+  ): Promise<string> {
+    const url = baseUrl || this.defaultBaseUrl;
+    const modelName = model || this.defaultModel;
+
+    const messages: ChatMessage[] = [
+      { role: 'user', content: CONSTANTS.TEST_MESSAGE }
+    ];
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages,
+          max_tokens: 50
+        })
+      });
+
+      if (!response.ok) {
+        handleErrorResponse(response);
       }
-      if (error instanceof TypeError) {
-        throw new ApiClientError('Network error. Please check your internet connection.', undefined, true);
+
+      const rawData = await response.json();
+      if (!isChatResponse(rawData)) {
+        throw new ApiClientError('Invalid response format from API');
       }
-      throw error;
+      return 'Connection successful!';
+    } catch (error) {
+      handleFetchError(error);
     }
   }
 }

@@ -309,3 +309,76 @@ export function getUnsupportedTypeHtml(fileName: string, supportedTypes: string[
 </body>
 </html>`;
 }
+
+export function getStreamingHtml(fileName?: string): string {
+  const headerText = fileName ? `锐评：${escapeHtml(fileName)}` : 'AI Response:';
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Code Roaster</title>
+  <style>
+    body {
+      font-family: var(--vscode-font-family);
+      color: var(--vscode-foreground);
+      background-color: var(--vscode-editor-background);
+      padding: 20px;
+      margin: 0;
+    }
+    .header {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--vscode-textLink-foreground);
+      margin-bottom: 12px;
+    }
+    .response {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: var(--vscode-editor-font-family);
+      font-size: var(--vscode-font-size);
+      line-height: 1.6;
+      color: var(--vscode-foreground);
+    }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 16px;
+      background-color: var(--vscode-textLink-foreground);
+      animation: blink 1s step-end infinite;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">${headerText}</div>
+  <div class="response"><span id="content"></span><span class="cursor" id="cursor"></span></div>
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    window.addEventListener('message', event => {
+      const message = event.data;
+      if (message.type === 'chunk') {
+        const content = document.getElementById('content');
+        content.textContent += message.content;
+        // Auto scroll to bottom
+        document.body.scrollTop = document.body.scrollHeight;
+      } else if (message.type === 'done') {
+        const cursor = document.getElementById('cursor');
+        cursor.style.display = 'none';
+      } else if (message.type === 'error') {
+        const cursor = document.getElementById('cursor');
+        cursor.style.display = 'none';
+        const content = document.getElementById('content');
+        content.textContent += '\\n\\n[Error: ' + message.content + ']';
+      }
+    });
+  </script>
+</body>
+</html>`;
+}

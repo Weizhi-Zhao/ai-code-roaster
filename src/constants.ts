@@ -1,11 +1,16 @@
 export const CONSTANTS = {
-   OPENROUTER_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
-   MODEL: 'xiaomi/mimo-v2-flash:free',
-   SECRET_KEY: 'openrouter-api-key',
-   TEST_MESSAGE: 'What is the meaning of life?',
+   // Default API configuration
+   DEFAULT_API_URL: 'https://openrouter.ai/api/v1/chat/completions',
+   DEFAULT_MODEL: 'nvidia/nemotron-3-nano-30b-a3b:free',
+
+   SECRET_KEY: 'AICodeRoaster-api-key',
+
+   TEST_MESSAGE: '1+1=?',
 
    // Code roasting configuration
    MAX_FILE_SIZE: 100 * 1024, // 100KB in bytes
+   MIN_TIME_INTERVAL: 60 * 1000, // 60 seconds in milliseconds
+   MIN_LINE_CHANGES: 10, // minimum number of line changes to consider as significant
    SUPPORTED_FILE_TYPES: [
       '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte',
       '.py', '.rb', '.go', '.rs', '.java', '.kt', '.swift',
