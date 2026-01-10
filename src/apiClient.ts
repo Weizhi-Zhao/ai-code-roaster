@@ -55,8 +55,13 @@ function handleFetchError(error: unknown): never {
     throw error;
 }
 
+/**
+ * Callback for streaming chunks.
+ * @param chunk - The latest content chunk received from the API
+ * @param fullContent - The complete accumulated content so far (for SSR markdown rendering)
+ */
 export interface StreamChunkCallback {
-    (chunk: string): void;
+    (chunk: string, fullContent: string): void;
 }
 
 /**
@@ -128,7 +133,8 @@ export class LlmApiClient {
                             const content = parsed.choices?.[0]?.delta?.content;
                             if (content) {
                                 fullContent += content;
-                                onChunk(content);
+                                // Pass both chunk and fullContent to callback (for SSR markdown rendering)
+                                onChunk(content, fullContent);
                             }
                         } catch {
                             // Ignore invalid JSON lines

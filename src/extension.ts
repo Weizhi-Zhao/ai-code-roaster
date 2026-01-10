@@ -1,11 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { CONSTANTS, ROLES, RoleType } from './constants';
 import { LlmApiClient } from './apiClient';
 import { RoastHistory } from './roastHistory';
 import { ConfigurationManager } from './configurationManager';
-import { getLoadingHtml, getNoApiKeyHtml, getSuccessHtml, getErrorHtml, getTooLargeHtml, getUnsupportedTypeHtml, getStreamingHtml } from './webviewContent';
+import { getLoadingHtml, getNoApiKeyHtml, getResponseHtml, getErrorHtml, getTooLargeHtml, getUnsupportedTypeHtml, getStreamingHtml } from './webviewContent';
 
 type FileValidationErrorType = 'unsupportedFileType' | 'fileTooLarge' | 'fileEmpty' | 'unknown';
 
@@ -20,6 +21,7 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
     private _isActive = false;
     private roastHistoryMap = new Map<string, RoastHistory>();
     private _refreshTimerId?: NodeJS.Timeout;
+    private _isRefreshing = false;
 
     /**
      * Creates a new instance of the AICodeRoasterViewProvider.
@@ -114,89 +116,106 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
      * 6. Request API (if all checks pass)
      */
     async refresh() {
+        // Prevent concurrent refresh calls
+        if (this._isRefreshing) {
+            return;
+        }
+
         // 1. Check active
         if (!this._isActive) {
             return;
         }
 
-        // 2. Get active document
-        const activeEditor = vscode.window.activeTextEditor;
-        if (!activeEditor?.document) {
-            this.updateWebview(getLoadingHtml('Open a file to start roasting...'));
-            return;
-        }
-        const document = activeEditor.document;
+        this._isRefreshing = true;
 
-        // 3. validateFile (includes empty check)
-        const validation = await this.validateFile(document);
-        if (!validation.isValid) {
-            switch (validation.errorType) {
-                case 'fileTooLarge':
-                    this.updateWebview(getTooLargeHtml(document.fileName, validation.errorMessage!, '100KB'));
-                    break;
-                case 'unsupportedFileType':
-                    this.updateWebview(getUnsupportedTypeHtml(document.fileName, CONSTANTS.SUPPORTED_FILE_TYPES));
-                    break;
-                case 'fileEmpty':
-                    this.updateWebview(getErrorHtml(validation.errorMessage!));
-                    break;
-                case 'unknown':
-                    this.updateWebview(getErrorHtml(validation.errorMessage!));
-                    break;
-            }
-            return;
-        }
-
-        // 4. RoastHistory.isSignificantChange
-        const filePath = document.uri.toString();
-        const currentRoleId = await this.configManager.getRole();
-        const cached = this.roastHistoryMap.get(filePath);
-        if (cached && !cached.isSignificantChange(document, currentRoleId)) {
-            // Show cached response
-            this.updateWebview(getSuccessHtml(cached.response, document.fileName));
-            return;
-        }
-
-        // 5. Check API key and config
-        const apiKey = await this.configManager.getApiKey();
-        const config = await this.configManager.getConfig();
-        if (!apiKey || !config) {
-            this.updateWebview(getNoApiKeyHtml());
-            return;
-        }
-
-        // 6. Request API with streaming
-        this.updateWebview(getStreamingHtml(document.fileName));
         try {
-            // Get the role config (role already retrieved above)
-            const roleConfig = ROLES[currentRoleId];
-
-            const response = await this.apiClient.roastCodeStream(
-                document.getText(),
-                document.fileName,
-                apiKey,
-                config.baseUrl,
-                config.model,
-                roleConfig.systemPrompt,
-                (chunk) => {
-                    // Send chunk to webview for streaming display
-                    this._view?.webview.postMessage({ type: 'chunk', content: chunk });
-                }
-            );
-            // Notify webview that streaming is done
-            this._view?.webview.postMessage({ type: 'done' });
-            // Store history and response
-            // Limit history to 100 entries - remove oldest if exceeded
-            if (this.roastHistoryMap.size >= 100) {
-                const oldestKey = this.roastHistoryMap.keys().next().value;
-                if (oldestKey !== undefined) {
-                    this.roastHistoryMap.delete(oldestKey);
-                }
+            // 2. Get active document
+            const activeEditor = vscode.window.activeTextEditor;
+            if (!activeEditor?.document) {
+                this.updateWebview(getLoadingHtml('Open a file to start roasting...'));
+                return;
             }
-            this.roastHistoryMap.set(filePath, new RoastHistory(document, response, currentRoleId));
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            this._view?.webview.postMessage({ type: 'error', content: errorMessage });
+            const document = activeEditor.document;
+
+            // 3. validateFile (includes empty check)
+            const validation = await this.validateFile(document);
+            if (!validation.isValid) {
+                switch (validation.errorType) {
+                    case 'fileTooLarge':
+                        this.updateWebview(getTooLargeHtml(document.fileName, validation.errorMessage!, '100KB'));
+                        break;
+                    case 'unsupportedFileType':
+                        this.updateWebview(getUnsupportedTypeHtml(document.fileName, CONSTANTS.SUPPORTED_FILE_TYPES));
+                        break;
+                    case 'fileEmpty':
+                        this.updateWebview(getErrorHtml(validation.errorMessage!));
+                        break;
+                    case 'unknown':
+                        this.updateWebview(getErrorHtml(validation.errorMessage!));
+                        break;
+                }
+                return;
+            }
+
+            // 4. RoastHistory.isSignificantChange
+            const filePath = document.uri.toString();
+            const currentRoleId = await this.configManager.getRole();
+            const cached = this.roastHistoryMap.get(filePath);
+            if (cached && !cached.isSignificantChange(document, currentRoleId)) {
+                // Show cached response (parse markdown for display, cached.response stays original)
+                const roleConfig = ROLES[currentRoleId];
+                const marked = await import('marked');
+                const htmlResponse = await marked.parse(cached.response);
+                this.updateWebview(getResponseHtml(htmlResponse, path.basename(document.fileName), roleConfig.header));
+                return;
+            }
+
+            // 5. Check API key and config
+            const apiKey = await this.configManager.getApiKey();
+            const config = await this.configManager.getConfig();
+            if (!apiKey || !config) {
+                this.updateWebview(getNoApiKeyHtml());
+                return;
+            }
+
+            // 6. Request API with streaming
+            const roleConfig = ROLES[currentRoleId];
+            this.updateWebview(getStreamingHtml(path.basename(document.fileName), roleConfig.header));
+            try {
+                // Dynamically import marked (ESM module in CommonJS context)
+                const marked = await import('marked');
+
+                const response = await this.apiClient.roastCodeStream(
+                    document.getText(),
+                    document.fileName,
+                    apiKey,
+                    config.baseUrl,
+                    config.model,
+                    roleConfig.systemPrompt,
+                    // Callback receives chunk and fullContent
+                    async (_chunk, fullContent) => {
+                        // SSR: Convert markdown to HTML in main process, then send to webview
+                        const htmlContent = await marked.parse(fullContent);
+                        this._view?.webview.postMessage({ type: 'chunk', content: htmlContent });
+                    }
+                );
+                // Notify webview that streaming is done
+                this._view?.webview.postMessage({ type: 'done' });
+                // Store history and response
+                // Limit history to 100 entries - remove oldest if exceeded
+                if (this.roastHistoryMap.size >= 100) {
+                    const oldestKey = this.roastHistoryMap.keys().next().value;
+                    if (oldestKey !== undefined) {
+                        this.roastHistoryMap.delete(oldestKey);
+                    }
+                }
+                this.roastHistoryMap.set(filePath, new RoastHistory(document, response, currentRoleId));
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                this._view?.webview.postMessage({ type: 'error', content: errorMessage });
+            }
+        } finally {
+            this._isRefreshing = false;
         }
     }
 
@@ -377,13 +396,13 @@ export function activate(context: vscode.ExtensionContext) {
         }));
 
         const selected = await vscode.window.showQuickPick(items, {
-            placeHolder: `当前角色: ${currentRoleName}`,
-            title: '选择 AI 角色'
+            placeHolder: `Current role: ${currentRoleName}`,
+            title: 'Switch AI Role'
         });
 
         if (selected) {
             await configManager.setRole(selected.value);
-            vscode.window.showInformationMessage(`已切换到: ${selected.label}`);
+            vscode.window.showInformationMessage(`Switched to: ${selected.label}`);
             await provider.refresh();
         }
     });

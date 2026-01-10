@@ -7,29 +7,77 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#039;');
 }
 
-export function getLoadingHtml(message: string = 'Loading AI response...'): string {
-  const escapedMessage = escapeHtml(message);
+const BASE_STYLES = `
+  body {
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 20px;
+    margin: 0;
+  }
+  .response {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-font-size);
+    line-height: 1.6;
+  }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 {
+    margin: 16px 0 8px;
+    color: var(--vscode-textLink-foreground);
+    font-weight: 600;
+  }
+  .markdown h1 { font-size: 1.5em; }
+  .markdown h2 { font-size: 1.3em; }
+  .markdown h3 { font-size: 1.15em; }
+  .markdown h4 { font-size: 1.05em; }
+  .markdown pre {
+    background-color: var(--vscode-textBlockQuote-background);
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  .markdown code {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-font-size);
+  }
+  .markdown :not(pre) > code {
+    background-color: var(--vscode-textBlockQuote-background);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .markdown blockquote {
+    border-left: 4px solid var(--vscode-textLink-foreground);
+    padding-left: 12px;
+    margin: 12px 0;
+    color: var(--vscode-descriptionForeground);
+  }
+  .markdown ul, .markdown ol { margin: 8px 0; padding-left: 24px; }
+  .markdown li { margin: 4px 0; }
+  .markdown p { margin: 8px 0; }
+  .markdown a { color: var(--vscode-textLink-foreground); }
+`;
+
+function getBaseHtml(bodyContent: string, extraStyles = ''): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Code Roaster</title>
-  <style>
+  <style>${BASE_STYLES}${extraStyles}</style>
+</head>
+<body>${bodyContent}</body>
+</html>`;
+}
+
+export function getLoadingHtml(message: string = 'Loading AI response...'): string {
+  const extraStyles = `
     body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 200px;
-    }
-    .loading-container {
-      text-align: center;
     }
     .spinner {
       width: 40px;
@@ -38,307 +86,165 @@ export function getLoadingHtml(message: string = 'Loading AI response...'): stri
       border-top: 3px solid var(--vscode-textLink-foreground);
       border-radius: 50%;
       animation: spin 1s linear infinite;
-      margin: 0 auto 16px;
+      margin-bottom: 16px;
     }
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    .loading-text {
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-    }
-  </style>
-</head>
-<body>
-  <div class="loading-container">
-    <div class="spinner"></div>
-    <div class="loading-text">${escapedMessage}</div>
-  </div>
-</body>
-</html>`;
+  `;
+
+  const body = `
+    <div style="text-align: center;">
+      <div class="spinner"></div>
+      <div>${escapeHtml(message)}</div>
+    </div>
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
 export function getNoApiKeyHtml(): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
-    .container {
-      max-width: 400px;
-    }
+  const extraStyles = `
+    .container { max-width: 400px; }
     h2 {
       font-size: 18px;
       margin-top: 0;
       color: var(--vscode-textLink-foreground);
     }
-    p {
-      font-size: var(--vscode-font-size);
-      line-height: 1.5;
-      color: var(--vscode-foreground);
-    }
-    .step {
-      margin: 12px 0;
-      padding-left: 16px;
-    }
-    .command-box {
+    .step { margin: 12px 0; padding-left: 16px; }
+    .info-box {
       background-color: var(--vscode-textBlockQuote-background);
       border-left: 4px solid var(--vscode-textLink-foreground);
       padding: 12px;
       margin: 16px 0;
-      font-family: var(--vscode-editor-font-family);
       font-size: 12px;
     }
-    .link {
-      color: var(--vscode-textLink-foreground);
-      text-decoration: none;
-    }
-    .link:hover {
-      text-decoration: underline;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h2>API Configuration Required</h2>
-    <p>To use this extension, you need to configure your API settings (supports any OpenAI-compatible API).</p>
-    <div class="step">1. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)</div>
-    <div class="step">2. Run <strong>"AI Code Roaster: Configure API"</strong></div>
-    <div class="step">3. Enter your API Base URL, Model Name, and API Key</div>
-    <div class="command-box">
-      Your API key will be securely stored in VSCode's secret storage.
+  `;
+
+  const body = `
+    <div class="container">
+      <h2>API Configuration Required</h2>
+      <p>To use this extension, configure your API settings (supports any OpenAI-compatible API).</p>
+      <div class="step">1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)</div>
+      <div class="step">2. Run <strong>"AI Code Roaster: Configure API"</strong></div>
+      <div class="step">3. Enter your API Base URL, Model Name, and API Key</div>
+      <div class="info-box">Your API key is securely stored in VSCode's secret storage.</div>
     </div>
-  </div>
-</body>
-</html>`;
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
-export function getSuccessHtml(content: string, fileName?: string): string {
-  // Escape HTML in the content
-  const escapedContent = escapeHtml(content);
-  const headerText = fileName ? `锐评：${escapeHtml(fileName)}` : 'AI Response:';
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
+export function getResponseHtml(content: string, fileName: string, header: string): string {
+  const extraStyles = `
     .header {
       font-size: 14px;
       font-weight: bold;
       color: var(--vscode-textLink-foreground);
       margin-bottom: 12px;
     }
-    .response {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-family: var(--vscode-editor-font-family);
-      font-size: var(--vscode-font-size);
-      line-height: 1.6;
-      color: var(--vscode-foreground);
-    }
-  </style>
-</head>
-<body>
-  <div class="header">${headerText}</div>
-  <div class="response">${escapedContent}</div>
-</body>
-</html>`;
+  `;
+
+  const body = `
+    <div class="header">${header}：${escapeHtml(fileName)}</div>
+    <div class="response markdown">${content}</div>
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
 export function getErrorHtml(message: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
-    .error-container {
+  const extraStyles = `
+    .status-container {
       border-left: 4px solid var(--vscode-errorForeground);
       padding-left: 12px;
     }
-    .error-title {
+    .status-title {
       font-size: 16px;
       font-weight: bold;
       color: var(--vscode-errorForeground);
       margin: 0 0 8px 0;
-    }
-    .error-message {
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-      margin: 0;
     }
     .hint {
       margin-top: 12px;
       font-size: 12px;
       color: var(--vscode-descriptionForeground);
     }
-  </style>
-</head>
-<body>
-  <div class="error-container">
-    <div class="error-title">Error</div>
-    <p class="error-message">${message}</p>
-    <p class="hint">Close and reopen this panel to try again.</p>
-  </div>
-</body>
-</html>`;
+  `;
+
+  const body = `
+    <div class="status-container">
+      <div class="status-title">Error</div>
+      <p>${message}</p>
+      <p class="hint">Close and reopen this panel to try again.</p>
+    </div>
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
 export function getTooLargeHtml(fileName: string, fileSize: string, maxSize: string): string {
-  const escapedFileName = escapeHtml(fileName);
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
-    .warning-container {
+  const extraStyles = `
+    .status-container {
       border-left: 4px solid var(--vscode-editorWarning-foreground);
       padding-left: 12px;
     }
-    .warning-title {
+    .status-title {
       font-size: 16px;
       font-weight: bold;
       color: var(--vscode-editorWarning-foreground);
       margin: 0 0 8px 0;
     }
-    .warning-message {
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-      margin: 0;
-    }
-  </style>
-</head>
-<body>
-  <div class="warning-container">
-    <div class="warning-title">File Too Large</div>
-    <p class="warning-message">
-      <strong>${escapedFileName}</strong> is ${fileSize}.
-      Maximum file size is ${maxSize}.
-    </p>
-  </div>
-</body>
-</html>`;
+  `;
+
+  const body = `
+    <div class="status-container">
+      <div class="status-title">File Too Large</div>
+      <p><strong>${escapeHtml(fileName)}</strong> is ${fileSize}. Maximum file size is ${maxSize}.</p>
+    </div>
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
 export function getUnsupportedTypeHtml(fileName: string, supportedTypes: string[]): string {
-  const escapedFileName = escapeHtml(fileName);
-  const escapedTypes = escapeHtml(supportedTypes.join(', '));
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
-    .info-container {
+  const extraStyles = `
+    .status-container {
       border-left: 4px solid var(--vscode-textLink-foreground);
       padding-left: 12px;
     }
-    .info-title {
+    .status-title {
       font-size: 16px;
       font-weight: bold;
       color: var(--vscode-textLink-foreground);
       margin: 0 0 8px 0;
-    }
-    .info-message {
-      font-size: var(--vscode-font-size);
-      color: var(--vscode-foreground);
-      margin: 0 0 12px 0;
     }
     .supported-types {
       font-size: 12px;
       color: var(--vscode-descriptionForeground);
       font-family: var(--vscode-editor-font-family);
     }
-  </style>
-</head>
-<body>
-  <div class="info-container">
-    <div class="info-title">Unsupported File Type</div>
-    <p class="info-message">
-      <strong>${escapedFileName}</strong> is not a supported file type.
-    </p>
-    <div class="supported-types">
-      Supported types: ${escapedTypes}
+  `;
+
+  const body = `
+    <div class="status-container">
+      <div class="status-title">Unsupported File Type</div>
+      <p><strong>${escapeHtml(fileName)}</strong> is not a supported file type.</p>
+      <div class="supported-types">Supported types: ${escapeHtml(supportedTypes.join(', '))}</div>
     </div>
-  </div>
-</body>
-</html>`;
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
 
-export function getStreamingHtml(fileName?: string): string {
-  const headerText = fileName ? `锐评：${escapeHtml(fileName)}` : 'AI Response:';
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Code Roaster</title>
-  <style>
-    body {
-      font-family: var(--vscode-font-family);
-      color: var(--vscode-foreground);
-      background-color: var(--vscode-editor-background);
-      padding: 20px;
-      margin: 0;
-    }
+export function getStreamingHtml(fileName: string, header: string): string {
+  const extraStyles = `
     .header {
       font-size: 14px;
       font-weight: bold;
       color: var(--vscode-textLink-foreground);
       margin-bottom: 12px;
-    }
-    .response {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      font-family: var(--vscode-editor-font-family);
-      font-size: var(--vscode-font-size);
-      line-height: 1.6;
-      color: var(--vscode-foreground);
     }
     .cursor {
       display: inline-block;
@@ -353,32 +259,27 @@ export function getStreamingHtml(fileName?: string): string {
       0%, 50% { opacity: 1; }
       51%, 100% { opacity: 0; }
     }
-  </style>
-</head>
-<body>
-  <div class="header">${headerText}</div>
-  <div class="response"><span id="content"></span><span class="cursor" id="cursor"></span></div>
-  <script>
-    const vscode = acquireVsCodeApi();
+  `;
 
-    window.addEventListener('message', event => {
-      const message = event.data;
-      if (message.type === 'chunk') {
-        const content = document.getElementById('content');
-        content.textContent += message.content;
-        // Auto scroll to bottom
-        document.body.scrollTop = document.body.scrollHeight;
-      } else if (message.type === 'done') {
-        const cursor = document.getElementById('cursor');
-        cursor.style.display = 'none';
-      } else if (message.type === 'error') {
-        const cursor = document.getElementById('cursor');
-        cursor.style.display = 'none';
-        const content = document.getElementById('content');
-        content.textContent += '\\n\\n[Error: ' + message.content + ']';
-      }
-    });
-  </script>
-</body>
-</html>`;
+  const body = `
+    <div class="header">${header}：${escapeHtml(fileName)}</div>
+    <div class="response markdown"><span id="content"></span><span class="cursor" id="cursor"></span></div>
+    <script>
+      const vscode = acquireVsCodeApi();
+      window.addEventListener('message', event => {
+        const message = event.data;
+        if (message.type === 'chunk') {
+          document.getElementById('content').innerHTML = message.content;
+          document.body.scrollTop = document.body.scrollHeight;
+        } else if (message.type === 'done') {
+          document.getElementById('cursor').style.display = 'none';
+        } else if (message.type === 'error') {
+          document.getElementById('cursor').style.display = 'none';
+          document.getElementById('content').innerHTML += '<p style="color: var(--vscode-errorForeground);">[Error: ' + message.content + ']</p>';
+        }
+      });
+    </script>
+  `;
+
+  return getBaseHtml(body, extraStyles);
 }
