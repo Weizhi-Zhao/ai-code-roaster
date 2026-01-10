@@ -4,14 +4,14 @@
   "icon": "resources/AI-Code-Roaster-icon.png",
   "publisher": "Weizhi-Zhao",
   "description": "AI-powered code roasting with streaming support. Supports multiple AI personalities (roaster/praiser) and works with any OpenAI-compatible API.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/Weizhi-Zhao/ai-code-roaster.git"
   },
   "engines": {
-    "vscode": "^1.107.0"
+    "vscode": "^1.74.0"
   },
   "categories": [
     "AI"
@@ -88,7 +88,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "@types/vscode": "^1.107.0",
+    "@types/vscode": "^1.74.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
