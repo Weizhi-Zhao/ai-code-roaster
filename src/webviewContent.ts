@@ -136,6 +136,49 @@ export function getNoApiKeyHtml(): string {
   return getBaseHtml(body, extraStyles);
 }
 
+export function getNoRoleHtml(error?: string): string {
+  const extraStyles = `
+    .container { max-width: 400px; }
+    h2 {
+      font-size: 18px;
+      margin-top: 0;
+      color: var(--vscode-textLink-foreground);
+    }
+    .step { margin: 12px 0; padding-left: 16px; }
+    .info-box {
+      background-color: var(--vscode-textBlockQuote-background);
+      border-left: 4px solid var(--vscode-textLink-foreground);
+      padding: 12px;
+      margin: 16px 0;
+      font-size: 12px;
+    }
+    .error-box {
+      background-color: var(--vscode-inputValidation-errorBackground);
+      border-left: 4px solid var(--vscode-errorForeground);
+      padding: 12px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: var(--vscode-errorForeground);
+    }
+  `;
+
+  const errorHtml = error ? `<div class="error-box">${escapeHtml(error)}</div>` : '';
+
+  const body = `
+    <div class="container">
+      <h2>Role Configuration Required</h2>
+      <p>To use this extension, select an AI personality role.</p>
+      <div class="step">1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)</div>
+      <div class="step">2. Run <strong>"AI Code Roaster: Switch Role"</strong></div>
+      <div class="step">3. Select a predefined role or create your own custom role!</div>
+      ${errorHtml}
+      <div class="info-box">Multiple predefined roles are available to choose from.<br>You can also create custom roles via the Command Palette.</div>
+    </div>
+  `;
+
+  return getBaseHtml(body, extraStyles);
+}
+
 export function getResponseHtml(content: string, fileName: string, header: string): string {
   const extraStyles = `
     .header {
@@ -184,7 +227,7 @@ export function getErrorHtml(message: string): string {
   return getBaseHtml(body, extraStyles);
 }
 
-export function getTooLargeHtml(fileName: string, fileSize: string, maxSize: string): string {
+export function getTooLargeHtml(fileName: string, message: string): string {
   const extraStyles = `
     .status-container {
       border-left: 4px solid var(--vscode-editorWarning-foreground);
@@ -201,7 +244,8 @@ export function getTooLargeHtml(fileName: string, fileSize: string, maxSize: str
   const body = `
     <div class="status-container">
       <div class="status-title">File Too Large</div>
-      <p><strong>${escapeHtml(fileName)}</strong> is ${fileSize}. Maximum file size is ${maxSize}.</p>
+      <p><strong>${escapeHtml(fileName)}</strong></p>
+      <p>${message}</p>
     </div>
   `;
 
@@ -268,7 +312,7 @@ export function getStreamingHtml(fileName: string, header: string): string {
       const vscode = acquireVsCodeApi();
       window.addEventListener('message', event => {
         const message = event.data;
-        if (message.type === 'chunk') {
+        if (message.type === 'contentUpdate') {
           document.getElementById('content').innerHTML = message.content;
           document.body.scrollTop = document.body.scrollHeight;
         } else if (message.type === 'done') {

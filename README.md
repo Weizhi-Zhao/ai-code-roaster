@@ -4,16 +4,17 @@
 
 > A VSCode extension that roasts your code with AI-powered humor and wit.
 
-AI Code Roaster analyzes your code files and generates entertaining feedback through 8 different AI personalities. Whether you want a brutal reality check or an ego boost, there's a role for you.
+AI Code Roaster analyzes your code files and generates entertaining feedback through 6 different AI personalities. Whether you want a brutal reality check or an ego boost, there's a role for you.
 
 ## Features
 
 - **Real-time streaming responses** from compatible LLM APIs
-- **8 AI personalities** with distinct styles (4 Chinese + 4 English)
+- **6 AI personalities** with distinct styles (3 Chinese + 3 English)
+- **Custom Role System** - Create, edit, and delete your own AI personalities
 - **Smart caching** with intelligent change detection
 - **Auto-refresh** when sidebar is visible
 - **Secure API key storage** using VSCode secrets API
-- **43+ supported file types** including JavaScript, TypeScript, Python, Go, Rust, Java, and more
+- **100+ supported file types** including JavaScript, TypeScript, Python, Go, Rust, Java, and more
 
 ## Quick Start
 
@@ -23,10 +24,18 @@ Get started in under 2 minutes:
 2. **Open the sidebar**: Explorer → "AI Code Roaster" panel
 3. **Configure API**: Click the gear icon → "Configure API"
 4. **Enter your credentials**:
-   - Base URL (e.g., `https://api.openai.com/v1`)
-   - Model name (e.g., `gpt-4`)
-   - API key
+   - Base URL (e.g., `https://openrouter.ai/api/v1`)
+   - Model name (e.g., `nvidia/nemotron-3-nano-30b-a3b:free`)
+   - API Key
 5. **Open any code file** and enjoy the roast!
+
+### Free APIs
+
+- [OpenRouter](https://openrouter.ai/)
+- [ModelScope](https://www.modelscope.cn/my/myaccesstoken)
+- [SiliconFlow](https://cloud.siliconflow.cn/me/account/ak)
+- [Z.AI](https://docs.bigmodel.cn/cn/guide/models/free/glm-4.7-flash)
+- [NVIDIA NIM](https://build.nvidia.com/explore/discover)
 
 ## Configuration
 
@@ -41,35 +50,28 @@ Configure your LLM API credentials via the command palette:
 
 | Setting | Description | Example |
 |---------|-------------|---------|
-| Base URL | Your LLM API endpoint (OpenAI-compatible) | `https://api.openai.com/v1` |
-| Model | The model to use for generation | `gpt-4`, `gpt-3.5-turbo` |
+| Base URL | Your LLM API endpoint (OpenAI-compatible) | `https://openrouter.ai/api/v1` |
+| Model | The model to use for generation | `nvidia/nemotron-3-nano-30b-a3b:free` |
 | API Key | Your API key (stored securely) | `sk-...` |
 
 **URL Requirements:**
 
 - Must use HTTPS (for production) OR `http://localhost` (for local development)
 
-### Free API Option
-
-You can get a **free GLM-4.5-Flash API** from [Zhipu AI (智谱AI)](https://docs.bigmodel.cn/cn/guide/develop/http/introduction):
-
-```text
-Base URL:  https://open.bigmodel.cn/api/paas/v4/chat/completions
-Model:     glm-4.5-flash
-API Key:   Sign up at bigmodel.cn to get your free API key
-```
-
 ### Commands
 
-| Command | Icon | Description |
-|---------|------|-------------|
-| `aiCodeRoaster.configureApi` | $(settings-gear) | Configure API settings |
-| `aiCodeRoaster.deleteApiConfig` | $(trash) | Delete all configuration |
-| `aiCodeRoaster.switchRole` | $(account) | Switch AI personality |
+| Command | Description |
+|---------|-------------|
+| `aiCodeRoaster.configureApi` | Configure API settings |
+| `aiCodeRoaster.deleteApiConfig` | Delete all configuration |
+| `aiCodeRoaster.switchRole` | Switch AI personality |
+| `aiCodeRoaster.createCustomRole` | Create custom role |
+| `aiCodeRoaster.editCustomRole` | Edit custom role |
+| `aiCodeRoaster.deleteCustomRole` | Delete custom role |
 
 ## AI Personalities
 
-Choose from 8 different AI personalities with unique styles:
+Choose from 6 different AI personalities with unique styles:
 
 ### Chinese Roles
 
@@ -77,8 +79,7 @@ Choose from 8 different AI personalities with unique styles:
 |------|------|-------|-------------|
 | `cn-roaster` | 🔥 锐评家 | Concise, sarcastic | Sharp-witted criticism with Chinese humor |
 | `cn-praiser` | ✨ 夸夸家 | Enthusiastic | Extravagant praise that goes hard |
-| `cn-roaster-meme` | 💀 梗王锐评 | Meme-heavy | High-density slang with emoji spam 💀🤡😭 |
-| `cn-praiser-hype` | 🏆 彩虹屁 | Social media hype | Extreme praise with XiaoHongShu vibes |
+| `cn-reviewer` | 🔍 代码审查官 | Professional | Rigorous, professional code review |
 
 ### English Roles
 
@@ -86,10 +87,36 @@ Choose from 8 different AI personalities with unique styles:
 |------|------|-------|-------------|
 | `en-roaster` | 🔥 Code Critic | Snarky, punchy | Witty criticism with sarcasm |
 | `en-praiser` | ✨ Code Hype-man | Energetic | Hype up your code with enthusiasm |
-| `en-roaster-savage` | 💀 Savage Mode | Brutal, slang-heavy | No mercy roasting with Gen Z slang |
-| `en-praiser-ultra` | 🏆 Hype Lord | Maximum energy | Legendary praise with TikTok vibes |
+| `en-reviewer` | 🔍 Code Reviewer | Professional | Rigorous, professional code review |
 
 **Switch roles**: Click the account icon in the sidebar header or use `AI Code Roaster: Switch Role`.
+
+## Custom Role System
+
+Create your own AI personalities with the Custom Role System:
+
+### Creating Custom Roles
+
+1. Open the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run `AI Code Roaster: Create Custom Role`
+3. Provide the following information:
+   - **Role ID**: A unique identifier (e.g., `my-custom-roaster`)
+   - **Name**: Display name (e.g., `🎨 My Custom Role`)
+   - **Description**: Short description of the role's style
+   - **Header**: Title displayed before the response
+   - **System Prompt**: The AI system prompt that defines the role's behavior
+
+### Managing Custom Roles
+
+- **Edit**: Use `AI Code Roaster: Edit Custom Role` to modify existing custom roles
+- **Delete**: Use `AI Code Roaster: Delete Custom Role` to remove custom roles
+- Custom roles are stored in `globalStorageUri/customRoles.json`
+
+### Role Validation
+
+- Role IDs must contain only letters, numbers, hyphens, and underscores
+- Custom role IDs cannot conflict with predefined roles
+- All fields (name, description, header, systemPrompt) are required
 
 ## Technical Details
 
@@ -103,14 +130,29 @@ The extension validates files in a tiered pipeline (optimized for performance):
 
 ### Supported File Types
 
-```
-.js .ts .jsx .tsx .vue .svelte
-.py .rb .go .rs .java .kt .swift
-.c .cpp .h .hpp .cs .php
-.scala .clj .hs .ml .ex .exs
-.lua .r .m .sh .bash .zsh
-.css .scss .sass .less .html .json
-.yaml .yml .toml .ini .cfg .conf
+```text
+JavaScript/TypeScript: .js .ts .jsx .tsx .mjs .cjs .mts .cts
+Frontend Frameworks: .vue .svelte .astro
+Backend Languages: .py .rb .go .rs .java .kt .kts .swift
+C/C++/C#: .c .cpp .cc .cxx .h .hpp .hxx .cs
+PHP: .php .phtml
+JVM Languages: .scala .sc .clj .cljs .groovy
+Functional: .hs .lhs .ml .mli .re .rei .fs .fsi .fsx
+Elixir/Erlang: .ex .exs .erl .hrl
+Scripting: .lua .r .rmd .pl .pm .t .ps1 .psm1 .psd1
+Shell Scripts: .sh .bash .zsh .fish .csh .tcsh .cmd .bat
+Dart/Flutter: .dart
+Other Compiled: .nim .cr .jl .v .zig .mo .lok
+WebAssembly: .wasm .wat
+Styling: .css .scss .sass .less .styl .stylus
+Markup & Templates: .html .htm .xml .svg .xhtml .md .markdown .rst .adoc
+Data Formats: .json .yaml .yml .toml .ini .cfg .conf .graphql .gql
+Config Files: .env .dockerfile .makefile .mk .cmake
+Protobuf & IDL: .proto .thrift .avsc
+Template Engines: .erb .ejs .hbs .mustache .twig .jinja .jinja2
+SQL: .sql .psql
+MATLAB/Mathematica: .m .wl .nb
+Misc: .ahk .vim .el .lisp
 ```
 
 ### Smart Caching
@@ -126,14 +168,14 @@ This minimizes API calls while keeping feedback fresh.
 
 ### Auto-Refresh
 
-The sidebar automatically refreshes every 5 seconds when visible, ensuring you always see the latest feedback.
+The sidebar automatically refreshes every 10 seconds when visible, ensuring you always see the latest feedback.
 
 ## Development
 
 ### Prerequisites
 
 - Node.js
-- VSCode Engine ^1.107.0
+- VSCode Engine ^1.74.0
 
 ### Build Commands
 
@@ -155,6 +197,7 @@ ai-code-roaster/
 │   ├── configurationManager.ts  # Secure config storage
 │   ├── roastHistory.ts       # Smart caching with diff
 │   ├── webviewContent.ts     # HTML generation
+│   ├── roleManager.ts        # Role management (predefined + custom)
 │   └── constants.ts          # Roles, file types, constants
 └── package.json
 ```

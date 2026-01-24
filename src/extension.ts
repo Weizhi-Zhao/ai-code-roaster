@@ -2,11 +2,12 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { CONSTANTS, ROLES, RoleType } from './constants';
+import { CONSTANTS, PREDEFINED_ROLES, DEFAULT_ROLE } from './constants';
 import { LlmApiClient } from './apiClient';
 import { RoastHistory } from './roastHistory';
 import { ConfigurationManager } from './configurationManager';
-import { getLoadingHtml, getNoApiKeyHtml, getResponseHtml, getErrorHtml, getTooLargeHtml, getUnsupportedTypeHtml, getStreamingHtml } from './webviewContent';
+import { RoleConfig } from './roleManager';
+import { getLoadingHtml, getNoApiKeyHtml, getNoRoleHtml, getResponseHtml, getErrorHtml, getTooLargeHtml, getUnsupportedTypeHtml, getStreamingHtml } from './webviewContent';
 
 type FileValidationErrorType = 'unsupportedFileType' | 'fileTooLarge' | 'fileEmpty' | 'unknown';
 
@@ -17,21 +18,22 @@ interface FileValidationResult {
 }
 
 class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
-    private _view?: vscode.WebviewView;
+    private _view!: vscode.WebviewView;
     private _isActive = false;
     private roastHistoryMap = new Map<string, RoastHistory>();
     private _refreshTimerId?: NodeJS.Timeout;
     private _isRefreshing = false;
+    private apiClient: LlmApiClient;
 
     /**
      * Creates a new instance of the AICodeRoasterViewProvider.
-     * @param configManager - Manages all configuration (API key, base URL, and model)
-     * @param apiClient - Handles communication with the LLM API
+     * @param configManager - Manages all configuration (API key, base URL, model, and roles)
      */
     constructor(
-        private configManager: ConfigurationManager,
-        private apiClient: LlmApiClient
-    ) { }
+        private configManager: ConfigurationManager
+    ) {
+        this.apiClient = new LlmApiClient();
+    }
 
     /**
      * Initializes the webview view when it is resolved by VS Code.
@@ -77,9 +79,7 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
      * @param html - The HTML string to render in the webview
      */
     private updateWebview(html: string) {
-        if (this._view) {
-            this._view.webview.html = html;
-        }
+        this._view.webview.html = html;
     }
 
     /**
@@ -142,7 +142,7 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
             if (!validation.isValid) {
                 switch (validation.errorType) {
                     case 'fileTooLarge':
-                        this.updateWebview(getTooLargeHtml(document.fileName, validation.errorMessage!, '100KB'));
+                        this.updateWebview(getTooLargeHtml(document.fileName, validation.errorMessage!));
                         break;
                     case 'unsupportedFileType':
                         this.updateWebview(getUnsupportedTypeHtml(document.fileName, CONSTANTS.SUPPORTED_FILE_TYPES));
@@ -159,11 +159,18 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
 
             // 4. RoastHistory.isSignificantChange
             const filePath = document.uri.toString();
-            const currentRoleId = await this.configManager.getRole();
+            let currentRoleId: string;
+            let roleConfig: RoleConfig;
+            try {
+                currentRoleId = this.configManager.getRoleId();
+                roleConfig = this.configManager.getRoleConfig(currentRoleId);
+            } catch (error) {
+                this.updateWebview(getNoRoleHtml((error as Error).message));
+                return;
+            }
             const cached = this.roastHistoryMap.get(filePath);
             if (cached && !cached.isSignificantChange(document, currentRoleId)) {
                 // Show cached response (parse markdown for display, cached.response stays original)
-                const roleConfig = ROLES[currentRoleId];
                 const marked = await import('marked');
                 const htmlResponse = await marked.parse(cached.response);
                 this.updateWebview(getResponseHtml(htmlResponse, path.basename(document.fileName), roleConfig.header));
@@ -172,14 +179,13 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
 
             // 5. Check API key and config
             const apiKey = await this.configManager.getApiKey();
-            const config = await this.configManager.getConfig();
+            const config = await this.configManager.getApiConfig();
             if (!apiKey || !config) {
                 this.updateWebview(getNoApiKeyHtml());
                 return;
             }
 
             // 6. Request API with streaming
-            const roleConfig = ROLES[currentRoleId];
             this.updateWebview(getStreamingHtml(path.basename(document.fileName), roleConfig.header));
             try {
                 // Dynamically import marked (ESM module in CommonJS context)
@@ -192,15 +198,15 @@ class AICodeRoasterViewProvider implements vscode.WebviewViewProvider {
                     config.baseUrl,
                     config.model,
                     roleConfig.systemPrompt,
-                    // Callback receives chunk and fullContent
-                    async (_chunk, fullContent) => {
-                        // SSR: Convert markdown to HTML in main process, then send to webview
+                    // Callback receives fullContent for SSR markdown rendering
+                    async (fullContent) => {
+                        // Convert markdown to HTML in main process, then send to webview
                         const htmlContent = await marked.parse(fullContent);
-                        this._view?.webview.postMessage({ type: 'chunk', content: htmlContent });
+                        this._view.webview.postMessage({ type: 'contentUpdate', content: htmlContent });
                     }
                 );
                 // Notify webview that streaming is done
-                this._view?.webview.postMessage({ type: 'done' });
+                this._view.webview.postMessage({ type: 'done' });
                 // Store history and response
                 // Limit history to 100 entries - remove oldest if exceeded
                 if (this.roastHistoryMap.size >= 100) {
@@ -286,10 +292,16 @@ The state of extension will change when:
 - deleteApiConfig command
 */
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     const configManager = new ConfigurationManager(context);
-    const apiClient = new LlmApiClient();
-    const provider = new AICodeRoasterViewProvider(configManager, apiClient);
+
+    // One-time migration from old globalState to new settings system
+    await configManager.migrateIfNeeded();
+
+    // Initialize custom roles from file
+    await configManager.initRoles();
+
+    const provider = new AICodeRoasterViewProvider(configManager);
 
     const webviewViewProvider = vscode.window.registerWebviewViewProvider('ai-code-roaster', provider);
     context.subscriptions.push(webviewViewProvider);
@@ -303,66 +315,39 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(fileChangeDisposable);
 
-    // Register command to configure API (URL, model, key)
+    // Register command to configure API (open settings or set API key)
     const configureCommand = vscode.commands.registerCommand('aiCodeRoaster.configureApi', async () => {
-        const currentConfig = await configManager.getConfig();
-        const currentApiKey = await configManager.getApiKey();
+        const config = vscode.workspace.getConfiguration('aiCodeRoaster');
+        const hasBaseUrl = !!config.get<string>('apiBaseUrl');
+        const hasModel = !!config.get<string>('modelName');
+        const hasKey = await configManager.getApiKey();
 
-        // Ask for API Base URL
-        const baseUrlInput = await vscode.window.showInputBox({
-            prompt: 'Enter API Base URL',
-            value: currentConfig?.baseUrl ?? ''
-        });
-        if (baseUrlInput === undefined) {
-            return; // User cancelled
-        }
+        const message = `Configure AI Code Roaster
 
-        // Ask for Model Name
-        const modelInput = await vscode.window.showInputBox({
-            prompt: 'Enter Model Name',
-            value: currentConfig?.model ?? ''
-        });
-        if (modelInput === undefined) {
-            return; // User cancelled
-        }
+• API Base URL: ${hasBaseUrl ? '✓' : '✗'}
+• Model Name: ${hasModel ? '✓' : '✗'}
+• API Key: ${hasKey ? '✓' : '✗'}`;
 
-        // Ask for API Key
-        const apiKeyInput = await vscode.window.showInputBox({
-            prompt: 'Enter API Key',
-            password: true,
-            value: ''
-        });
-        if (apiKeyInput === undefined) {
-            return; // User cancelled
-        }
+        const result = await vscode.window.showInformationMessage(
+            message,
+            'Open Settings',
+            'Set API Key'
+        );
 
-        // Use new input if provided, otherwise keep current value
-        const baseUrl = baseUrlInput.trim() || currentConfig?.baseUrl;
-        const model = modelInput.trim() || currentConfig?.model;
-        const apiKey = apiKeyInput.trim() || currentApiKey;
+        if (result === 'Open Settings') {
+            await vscode.commands.executeCommand('workbench.action.openSettings', 'aiCodeRoaster');
+        } else if (result === 'Set API Key') {
+            const apiKey = await vscode.window.showInputBox({
+                prompt: 'Enter your API Key',
+                password: true,
+                ignoreFocusOut: true
+            });
 
-        // Validate: if both current and new are empty, show error
-        if (!baseUrl) {
-            vscode.window.showErrorMessage('API Base URL is required.');
-            return;
-        }
-        if (!model) {
-            vscode.window.showErrorMessage('Model Name is required.');
-            return;
-        }
-        if (!apiKey) {
-            vscode.window.showErrorMessage('API Key is required.');
-            return;
-        }
-
-        // Save config
-        try {
-            await configManager.saveConfig({ baseUrl, model });
-            await configManager.storeApiKey(apiKey);
-            vscode.window.showInformationMessage('Configuration saved successfully!');
-            await provider.refresh();
-        } catch (error) {
-            vscode.window.showErrorMessage(`Failed to save configuration: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            if (apiKey) {
+                await configManager.storeApiKey(apiKey);
+                vscode.window.showInformationMessage('API Key saved successfully!');
+                await provider.refresh();
+            }
         }
     });
     context.subscriptions.push(configureCommand);
@@ -370,14 +355,14 @@ export function activate(context: vscode.ExtensionContext) {
     // Register command to delete all configuration (API key + API config)
     const deleteApiConfigCommand = vscode.commands.registerCommand('aiCodeRoaster.deleteApiConfig', async () => {
         const confirmed = await vscode.window.showWarningMessage(
-            'Delete all configuration (API key and API settings)?',
+            'Delete all configuration (API key, Base URL, Model, Role)?',
             { modal: true },
             'Delete'
         );
 
         if (confirmed === 'Delete') {
             await configManager.deleteApiKey();
-            await configManager.deleteConfig();
+            await configManager.deleteAllConfig();
             vscode.window.showInformationMessage('All configuration deleted successfully!');
             await provider.refresh();
         }
@@ -386,13 +371,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register command to switch role
     const switchRoleCommand = vscode.commands.registerCommand('aiCodeRoaster.switchRole', async () => {
-        const currentRole = await configManager.getRole();
-        const currentRoleName = ROLES[currentRole].name;
+        let currentRoleName = 'Not set';
+        try {
+            const currentRoleId = configManager.getRoleId();
+            const currentRoleConfig = configManager.getRoleConfig(currentRoleId);
+            currentRoleName = currentRoleConfig.name;
+        } catch {
+            // Role not configured or invalid, use default name
+        }
 
-        const items = Object.entries(ROLES).map(([key, role]) => ({
-            label: role.name,
+        const items = configManager.getAllRoles().map((role: RoleConfig) => ({
+            label: role.isCustom ? `${role.name} (Custom)` : role.name,
             description: role.description,
-            value: key as RoleType
+            value: role.id
         }));
 
         const selected = await vscode.window.showQuickPick(items, {
@@ -407,6 +398,201 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     context.subscriptions.push(switchRoleCommand);
+
+    // Register command to create custom role
+    const createCustomRoleCommand = vscode.commands.registerCommand('aiCodeRoaster.createCustomRole', async () => {
+        // Role ID
+        const roleId = await vscode.window.showInputBox({
+            prompt: 'Enter Role ID (letters, numbers, hyphens, underscores only)',
+            placeHolder: 'my-custom-role',
+            validateInput: (value) => {
+                if (!value || !/^[a-zA-Z0-9_-]+$/.test(value)) {
+                    return 'Invalid format. Use only letters, numbers, hyphens, and underscores.';
+                }
+                if (value in PREDEFINED_ROLES) {
+                    return 'This ID conflicts with a predefined role.';
+                }
+                if (configManager.getCustomRoles().some((r: RoleConfig) => r.id === value)) {
+                    return 'This ID already exists.';
+                }
+                return null;
+            }
+        });
+
+        if (!roleId) { return; }
+
+        // Display name
+        const name = await vscode.window.showInputBox({
+            prompt: 'Enter display name',
+            placeHolder: '🎨 My Custom Role',
+            validateInput: (value) => !value ? 'Name is required.' : null
+        });
+
+        if (!name) { return; }
+
+        // Description
+        const description = await vscode.window.showInputBox({
+            prompt: 'Enter description',
+            placeHolder: 'A custom role for...',
+            validateInput: (value) => !value ? 'Description is required.' : null
+        });
+
+        if (!description) { return; }
+
+        // Header
+        const header = await vscode.window.showInputBox({
+            prompt: 'Enter response header',
+            placeHolder: '🎨 Custom Review',
+            validateInput: (value) => !value ? 'Header is required.' : null
+        });
+
+        if (!header) { return; }
+
+        // System prompt
+        const systemPrompt = await vscode.window.showInputBox({
+            prompt: 'Enter system prompt (AI behavior instructions)',
+            placeHolder: 'You are a code reviewer that...',
+            validateInput: (value) => !value ? 'System prompt is required.' : null
+        });
+
+        if (!systemPrompt) { return; }
+
+        // Create the custom role
+        try {
+            await configManager.createCustomRole({
+                id: roleId,
+                name,
+                description,
+                header,
+                systemPrompt
+            });
+            vscode.window.showInformationMessage(`Custom role "${name}" created successfully!`);
+            await provider.refresh();
+        } catch (error) {
+            vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+        }
+    });
+    context.subscriptions.push(createCustomRoleCommand);
+
+    // Register command to edit custom role
+    const editCustomRoleCommand = vscode.commands.registerCommand('aiCodeRoaster.editCustomRole', async () => {
+        const customRoles = configManager.getCustomRoles();
+
+        if (customRoles.length === 0) {
+            vscode.window.showInformationMessage('No custom roles to edit. Create one first!');
+            return;
+        }
+
+        // Select role to edit
+        const selectedRole = await vscode.window.showQuickPick(
+            customRoles.map((role: RoleConfig) => ({
+                label: role.name,
+                description: role.description,
+                value: role
+            })),
+            {
+                placeHolder: 'Select a custom role to edit',
+                title: 'Edit Custom Role'
+            }
+        );
+
+        if (!selectedRole) { return; }
+
+        const role = selectedRole.value;
+
+        // Select field to edit
+        const field = await vscode.window.showQuickPick([
+            { label: 'Name', value: 'name' },
+            { label: 'Description', value: 'description' },
+            { label: 'Header', value: 'header' },
+            { label: 'System Prompt', value: 'systemPrompt' }
+        ], {
+            placeHolder: 'Select field to edit',
+            title: `Edit ${role.name}`
+        });
+
+        if (!field) { return; }
+
+        // Get new value
+        const newValue = await vscode.window.showInputBox({
+            prompt: `Enter new ${field.label}`,
+            value: role[field.value as keyof RoleConfig] as string,
+            validateInput: (value) => !value ? 'Value cannot be empty.' : null
+        });
+
+        if (!newValue) { return; }
+
+        // Update the role
+        try {
+            await configManager.updateCustomRole(role.id, {
+                [field.value]: newValue
+            });
+            vscode.window.showInformationMessage(`Custom role "${role.name}" updated successfully!`);
+            await provider.refresh();
+        } catch (error) {
+            vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+        }
+    });
+    context.subscriptions.push(editCustomRoleCommand);
+
+    // Register command to delete custom role
+    const deleteCustomRoleCommand = vscode.commands.registerCommand('aiCodeRoaster.deleteCustomRole', async () => {
+        const customRoles = configManager.getCustomRoles();
+
+        if (customRoles.length === 0) {
+            vscode.window.showInformationMessage('No custom roles to delete.');
+            return;
+        }
+
+        // Select role to delete
+        const selectedRole = await vscode.window.showQuickPick(
+            customRoles.map((role: RoleConfig) => ({
+                label: role.name,
+                description: role.description,
+                value: role
+            })),
+            {
+                placeHolder: 'Select a custom role to delete',
+                title: 'Delete Custom Role'
+            }
+        );
+
+        if (!selectedRole) { return; }
+
+        const role = selectedRole.value;
+
+        // Confirm deletion
+        const confirmed = await vscode.window.showWarningMessage(
+            `Delete custom role "${role.name}"?`,
+            { modal: true },
+            'Delete'
+        );
+
+        if (confirmed !== 'Delete') { return; }
+
+        // Delete the role
+        try {
+            await configManager.deleteCustomRole(role.id);
+
+            // Check if the deleted role was the current role
+            try {
+                const currentRoleId = configManager.getRoleId();
+                if (currentRoleId === role.id) {
+                    await configManager.setRole(DEFAULT_ROLE);
+                    vscode.window.showInformationMessage(`Custom role "${role.name}" deleted successfully! Reset to default role: ${PREDEFINED_ROLES[DEFAULT_ROLE].name}`);
+                } else {
+                    vscode.window.showInformationMessage(`Custom role "${role.name}" deleted successfully!`);
+                }
+            } catch {
+                // No valid role configured, just show delete message
+                vscode.window.showInformationMessage(`Custom role "${role.name}" deleted successfully!`);
+            }
+            await provider.refresh();
+        } catch (error) {
+            vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
+        }
+    });
+    context.subscriptions.push(deleteCustomRoleCommand);
 }
 
 export function deactivate() { }

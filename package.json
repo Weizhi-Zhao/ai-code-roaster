@@ -4,7 +4,7 @@
   "icon": "resources/AI-Code-Roaster-icon.png",
   "publisher": "Weizhi-Zhao",
   "description": "AI-powered code roasting with streaming support. Supports multiple AI personalities (roaster/praiser) and works with any OpenAI-compatible API.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -19,13 +19,35 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "AI Code Roaster",
+      "properties": {
+        "aiCodeRoaster.apiBaseUrl": {
+          "type": "string",
+          "default": "https://openrouter.ai/api/v1",
+          "description": "API Base URL",
+          "order": 1
+        },
+        "aiCodeRoaster.modelName": {
+          "type": "string",
+          "default": "nvidia/nemotron-3-nano-30b-a3b:free",
+          "description": "Model name to use for API calls",
+          "order": 2
+        },
+        "aiCodeRoaster.role": {
+          "type": "string",
+          "description": "AI personality for code review. Use 'AI Code Roaster: Switch Role' command to select from predefined and custom roles.",
+          "order": 3
+        }
+      }
+    },
     "views": {
       "explorer": [
         {
           "type": "webview",
           "id": "ai-code-roaster",
           "name": "AI Code Roaster",
-          "icon": "media/icon.svg",
+          "icon": "$(robot)",
           "contextualTitle": "AI Code Roaster"
         }
       ]
@@ -51,6 +73,25 @@
         "command": "aiCodeRoaster.switchRole",
         "title": "AI Code Roaster: Switch Role",
         "icon": "$(account)"
+      },
+      {
+        "command": "aiCodeRoaster.createCustomRole",
+        "title": "AI Code Roaster: Create Custom Role"
+      },
+      {
+        "command": "aiCodeRoaster.editCustomRole",
+        "title": "AI Code Roaster: Edit Custom Role"
+      },
+      {
+        "command": "aiCodeRoaster.deleteCustomRole",
+        "title": "AI Code Roaster: Delete Custom Role"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "aiCodeRoaster.roleManagement",
+        "label": "Role Management",
+        "icon": "$(ellipsis)"
       }
     ],
     "menus": {
@@ -69,6 +110,25 @@
           "command": "aiCodeRoaster.deleteApiConfig",
           "when": "view == ai-code-roaster",
           "group": "navigation@2"
+        },
+        {
+          "submenu": "aiCodeRoaster.roleManagement",
+          "when": "view == ai-code-roaster",
+          "group": "navigation@3"
+        }
+      ],
+      "aiCodeRoaster.roleManagement": [
+        {
+          "command": "aiCodeRoaster.createCustomRole",
+          "group": "role@1"
+        },
+        {
+          "command": "aiCodeRoaster.editCustomRole",
+          "group": "role@2"
+        },
+        {
+          "command": "aiCodeRoaster.deleteCustomRole",
+          "group": "role@3"
         }
       ]
     }

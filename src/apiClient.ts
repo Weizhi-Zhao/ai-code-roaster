@@ -56,12 +56,33 @@ function handleFetchError(error: unknown): never {
 }
 
 /**
- * Callback for streaming chunks.
- * @param chunk - The latest content chunk received from the API
+ * Normalize API base URL to ensure it ends with /chat/completions
+ * @param baseUrl - The base URL to normalize
+ * @returns The normalized URL with /chat/completions path
+ */
+function normalizeBaseUrl(baseUrl: string): string {
+    const trimmedUrl = baseUrl.trim();
+    const chatCompletionsPath = '/chat/completions';
+
+    // Check if URL already ends with /chat/completions
+    if (trimmedUrl.endsWith(chatCompletionsPath)) {
+        return trimmedUrl;
+    }
+
+    // Remove trailing slash if present, then add /chat/completions
+    const normalizedUrl = trimmedUrl.endsWith('/')
+        ? trimmedUrl + chatCompletionsPath.slice(1)
+        : trimmedUrl + chatCompletionsPath;
+
+    return normalizedUrl;
+}
+
+/**
+ * Callback for streaming content updates.
  * @param fullContent - The complete accumulated content so far (for SSR markdown rendering)
  */
-export interface StreamChunkCallback {
-    (chunk: string, fullContent: string): void;
+export interface StreamingContentCallback {
+    (fullContent: string): void;
 }
 
 /**
@@ -77,9 +98,9 @@ export class LlmApiClient {
         baseUrl: string,
         model: string,
         systemPrompt: string,
-        onChunk: StreamChunkCallback
+        onChunk: StreamingContentCallback
     ): Promise<string> {
-        const url = baseUrl;
+        const url = normalizeBaseUrl(baseUrl);
         const modelName = model;
 
         const messages: ChatMessage[] = [
@@ -133,8 +154,8 @@ export class LlmApiClient {
                             const content = parsed.choices?.[0]?.delta?.content;
                             if (content) {
                                 fullContent += content;
-                                // Pass both chunk and fullContent to callback (for SSR markdown rendering)
-                                onChunk(content, fullContent);
+                                // Pass fullContent to callback (for SSR markdown rendering)
+                                onChunk(fullContent);
                             }
                         } catch {
                             // Ignore invalid JSON lines
@@ -157,7 +178,7 @@ export class LlmApiClient {
         model: string,
         systemPrompt: string
     ): Promise<string> {
-        const url = baseUrl;
+        const url = normalizeBaseUrl(baseUrl);
         const modelName = model;
 
         const messages: ChatMessage[] = [
@@ -197,7 +218,7 @@ export class LlmApiClient {
         baseUrl: string,
         model: string
     ): Promise<string> {
-        const url = baseUrl;
+        const url = normalizeBaseUrl(baseUrl);
         const modelName = model;
 
         const messages: ChatMessage[] = [

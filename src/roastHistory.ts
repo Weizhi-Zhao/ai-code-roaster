@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { diffLines } from 'diff';
-import { CONSTANTS, RoleType } from './constants';
+import { CONSTANTS } from './constants';
 
 /**
  * Represents the history of a code roast operation.
@@ -10,9 +10,9 @@ export class RoastHistory {
     readonly filePath: string;
     readonly fileContent: string;
     readonly response: string;
-    readonly roleId: RoleType;
+    readonly roleId: string;
 
-    constructor(document: vscode.TextDocument, response: string, roleId: RoleType) {
+    constructor(document: vscode.TextDocument, response: string, roleId: string) {
         this.timestamp = new Date().toISOString();
         this.filePath = document.uri.toString();
         this.fileContent = document.getText();
@@ -49,7 +49,7 @@ export class RoastHistory {
      * @param currentRole The current AI role
      * @returns true if the difference is significant, false otherwise
      */
-    isSignificantChange(newDocument: vscode.TextDocument, currentRoleId: RoleType): boolean {
+    isSignificantChange(newDocument: vscode.TextDocument, currentRoleId: string): boolean {
         // Role change immediately indicates significant change
         if (this.roleId !== currentRoleId) {
             return true;
