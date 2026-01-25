@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Version & Development
 
-- **Current Version**: 0.0.3
+- **Current Version**: 0.0.4
 - **Minimum VSCode Version**: 1.74.0
 - **License**: GPL-3.0-only
 
@@ -61,7 +61,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|-------|---------|
 | [src/extension.ts](src/extension.ts) | ~600 | Main entry point, `AICodeRoasterViewProvider`, command registration |
 | [src/apiClient.ts](src/apiClient.ts) | ~256 | `LlmApiClient` for streaming/non-streaming API calls |
-| [src/configurationManager.ts](src/configurationManager.ts) | ~196 | `ConfigurationManager` - config, secrets, role delegation |
+| [src/configurationManager.ts](src/configurationManager.ts) | ~223 | `ConfigurationManager` - config, secrets, role delegation |
 | [src/roleManager.ts](src/roleManager.ts) | ~198 | `RoleManager` - predefined + custom roles, file storage |
 | [src/roastHistory.ts](src/roastHistory.ts) | ~68 | `RoastHistory` for smart caching with diff-based change detection |
 | [src/webviewContent.ts](src/webviewContent.ts) | ~330 | HTML generation for all webview states |
@@ -198,11 +198,11 @@ webviewView.webview.postMessage({
 
 Located in [package.json:22-42](package.json#L22-L42):
 
-| Setting | Type | Default |
-|---------|------|---------|
-| `aiCodeRoaster.apiBaseUrl` | string | `"https://openrouter.ai/api/v1"` |
-| `aiCodeRoaster.modelName` | string | `"nvidia/nemotron-3-nano-30b-a3b:free"` |
-| `aiCodeRoaster.role` | string | `"cn-roaster"` |
+| Setting | Type | Description |
+|---------|------|-------------|
+| `aiCodeRoaster.apiBaseUrl` | string | API Base URL (e.g., 'https://openrouter.ai/api/v1') |
+| `aiCodeRoaster.modelName` | string | Model name (e.g., 'nvidia/nemotron-3-nano-30b-a3b:free') |
+| `aiCodeRoaster.role` | string | AI personality for code review |
 
 ## Dependencies
 

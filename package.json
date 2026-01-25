@@ -4,7 +4,7 @@
   "icon": "resources/AI-Code-Roaster-icon.png",
   "publisher": "Weizhi-Zhao",
   "description": "AI-powered code roasting with streaming support. Supports multiple AI personalities (roaster/praiser) and works with any OpenAI-compatible API.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -24,19 +24,17 @@
       "properties": {
         "aiCodeRoaster.apiBaseUrl": {
           "type": "string",
-          "default": "https://openrouter.ai/api/v1",
-          "description": "API Base URL",
+          "description": "API Base URL (e.g., 'https://openrouter.ai/api/v1')",
           "order": 1
         },
         "aiCodeRoaster.modelName": {
           "type": "string",
-          "default": "nvidia/nemotron-3-nano-30b-a3b:free",
-          "description": "Model name to use for API calls",
+          "description": "Model name to use for API calls (e.g., 'nvidia/nemotron-3-nano-30b-a3b:free')",
           "order": 2
         },
         "aiCodeRoaster.role": {
           "type": "string",
-          "description": "AI personality for code review. Use 'AI Code Roaster: Switch Role' command to select from predefined and custom roles.",
+          "description": "AI personality for code review. Use 'AI Code Roaster: Switch Role' command to select roles.",
           "order": 3
         }
       }

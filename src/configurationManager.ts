@@ -41,17 +41,15 @@ export class ConfigurationManager {
         const oldRole = this.context.globalState.get<string>(this.OLD_ROLE_KEY);
 
         if (oldConfig || oldRole) {
-            const config = vscode.workspace.getConfiguration(this.CONFIG_SECTION);
-
             // Migrate API config
             if (oldConfig) {
-                await config.update("apiBaseUrl", oldConfig.baseUrl);
-                await config.update("modelName", oldConfig.model);
+                await this.updateConfig("apiBaseUrl", oldConfig.baseUrl);
+                await this.updateConfig("modelName", oldConfig.model);
             }
 
             // Migrate Role
             if (oldRole) {
-                await config.update("role", oldRole);
+                await this.updateConfig("role", oldRole);
             }
 
             // Clear old configuration
@@ -68,6 +66,35 @@ export class ConfigurationManager {
      */
     async initRoles(): Promise<void> {
         await this.roleManager.loadCustomRoles();
+    }
+
+    // ========== Configuration Update Helper ==========
+
+    /**
+     * Smart configuration update: updates the setting at the same level where it currently exists.
+     * Uses inspect() to detect the current configuration level and updates there.
+     * @param key Configuration key (e.g., "role")
+     * @param value New value (pass undefined to delete the configuration)
+     */
+    private async updateConfig(key: string, value: any): Promise<void> {
+        const config = vscode.workspace.getConfiguration(this.CONFIG_SECTION);
+        const info = config.inspect(key);
+
+        let target = vscode.ConfigurationTarget.Global; // Default fallback
+
+        // Priority detection: update where it's defined
+        if (info?.workspaceFolderValue !== undefined) {
+            target = vscode.ConfigurationTarget.WorkspaceFolder;
+        } else if (info?.workspaceValue !== undefined) {
+            target = vscode.ConfigurationTarget.Workspace;
+        } else if (info?.globalValue !== undefined) {
+            target = vscode.ConfigurationTarget.Global;
+        } else {
+            // All undefined: default to Global
+            target = vscode.ConfigurationTarget.Global;
+        }
+
+        await config.update(key, value, target);
     }
 
     // ========== Configuration from VSCode Settings ==========
@@ -110,8 +137,7 @@ export class ConfigurationManager {
      * Sets the role preference in settings.
      */
     async setRole(role: string): Promise<void> {
-        const config = vscode.workspace.getConfiguration(this.CONFIG_SECTION);
-        await config.update("role", role);
+        await this.updateConfig("role", role);
     }
 
     // ========== Role Management Delegation ==========
@@ -187,9 +213,8 @@ export class ConfigurationManager {
      * Role is reset to DEFAULT_ROLE instead of undefined.
      */
     async deleteAllConfig(): Promise<void> {
-        const config = vscode.workspace.getConfiguration(this.CONFIG_SECTION);
-        await config.update('apiBaseUrl', undefined);
-        await config.update('modelName', undefined);
-        await config.update('role', DEFAULT_ROLE);
+        await this.updateConfig('apiBaseUrl', undefined);
+        await this.updateConfig('modelName', undefined);
+        await this.updateConfig('role', DEFAULT_ROLE);
     }
 }
